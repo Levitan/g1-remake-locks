@@ -1,0 +1,145 @@
+<div class="shell">
+
+  <!-- ── TOOLBAR ──────────────────────────────────── -->
+  <header class="toolbar">
+    <span class="logo">🔒 Gothic Lock Solver</span>
+    <div class="toolbar-actions">
+      <button
+        class="btn-add-plate"
+        [disabled]="plates().length >= MAX_PLATES"
+        (click)="addPlate()"
+        title="Add plate (max {{ MAX_PLATES }})"
+      >+ Plate</button>
+      <button
+        class="btn-clear"
+        [disabled]="plates().length === 0"
+        (click)="clearAllPlates()"
+        title="Remove all plates"
+      >✕ Clear</button>
+      <button
+        class="btn-solve"
+        [disabled]="plates().length === 0 || solving()"
+        (click)="solve()"
+      >{{ solving() ? '⏳ Solving…' : '⚡ Solve' }}</button>
+    </div>
+  </header>
+
+  <!-- ── MAIN ─────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar">
+
+      @if (selectedSeq(); as sel) {
+        <div class="selected-info">
+          <div class="selected-header">
+            <strong>Plate {{ sel }}</strong>
+            <button class="btn-remove-plate" (click)="removePlate(sel)">✕</button>
+          </div>
+
+          <div class="position-row">
+            <label>Position (1–7):</label>
+            <input
+              type="number"
+              [min]="MIN_POS"
+              [max]="MAX_POS"
+              [ngModel]="plateBySeq(sel)?.position"
+              (ngModelChange)="setPosition(sel, $event)"
+              class="pos-input"
+            />
+          </div>
+
+          <div class="deps-section">
+            <div class="deps-header">
+              <span>Dependencies</span>
+              @if (depEditorSource() === sel) {
+                <button class="btn-cancel-dep" (click)="cancelDepEditor()">✕ Cancel</button>
+              } @else {
+                <button
+                  class="btn-add-dep"
+                  [disabled]="plates().length < 2"
+                  (click)="startAddDep(sel)"
+                  title="Click the target plate in the visualizer"
+                >+</button>
+              }
+            </div>
+
+            @if (depEditorSource() === sel) {
+              <div class="dep-adding-hint">Click the target plate in the view…</div>
+            } @else {
+              @if (!plateBySeq(sel)?.dependencies?.length) {
+                <div class="no-deps">none</div>
+              }
+              @for (dep of plateBySeq(sel)?.dependencies ?? []; track dep.plateSequence) {
+                <div class="dep-item">
+                  <span class="dep-icon" [class.parallel]="dep.direction === 'PARALLEL'">
+                    {{ dep.direction === 'PARALLEL' ? '⇉' : '⇄' }}
+                  </span>
+                  <span class="dep-label">
+                    → Plate {{ dep.plateSequence }}
+                    <em>({{ dep.direction === 'PARALLEL' ? 'parallel' : 'opposite' }})</em>
+                  </span>
+                  <button class="btn-remove-dep" (click)="removeDep(sel, dep.plateSequence)">×</button>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="select-hint">
+          @if (plates().length > 0) {
+            Click a plate to edit
+          } @else {
+            Click <strong>+ Plate</strong> to get started
+          }
+        </div>
+      }
+
+      <hr class="divider" />
+
+      <app-solution-panel
+        [response]="solveResponse()"
+        (stepActivated)="applyStep($event)"
+        (resetRequested)="resetPositions()"
+      />
+    </aside>
+
+    <!-- CENTER: lock visualization -->
+    <main class="center">
+      @if (plates().length === 0) {
+        <div class="empty-state">
+          <div class="empty-icon">🔒</div>
+          <p>Click <strong>+ Plate</strong> to create a lock</p>
+          <p class="empty-sub">Position 4 is the unlocked state (goal)</p>
+        </div>
+      } @else {
+        @if (plates().length > 0) {
+          <p class="dep-hint">
+            💡 <strong>How to add a dependency:</strong> select a plate → click <strong>+</strong> next to Dependencies in the sidebar → click the target plate in the view
+          </p>
+        }
+
+        <app-lock-view
+          [plates]="plates()"
+          (move)="manualMove($event)"
+          (plateSelected)="onPlateSelected($event)"
+          (positionSet)="setPosition($event.sequence, $event.position)"
+        />
+      }
+
+      @if (solveError()) {
+        <div class="error-banner">⚠️ {{ solveError() }}</div>
+      }
+    </main>
+  </div>
+</div>
+
+<!-- Dep-editor modal -->
+@if (depEditorFrom() !== null && depEditorTo() !== null) {
+  <app-dep-editor
+    [fromSequence]="depEditorFrom()!"
+    [toSequence]="depEditorTo()!"
+    (confirmed)="addDep($event)"
+    (cancel)="cancelDepEditor()"
+  />
+}
