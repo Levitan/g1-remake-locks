@@ -9,25 +9,24 @@ import { FormsModule } from '@angular/forms';
 
 import { SolverService } from './services/solver.service';
 import { LockViewComponent } from './components/lock-view/lock-view.component';
-import { DepEditorComponent, DepEditorResult } from './components/dep-editor/dep-editor.component';
 import { SolutionPanelComponent } from './components/solution-panel/solution-panel.component';
 
 import {
   PlateState,
-  Dependency,
+  Direction,
   SolveResponse,
   Lock,
 } from './models/lock.model';
 
-const MIN_POS   = 1;
-const MAX_POS   = 7;
-const GOAL      = 4;
+const MIN_POS    = 1;
+const MAX_POS    = 7;
+const GOAL       = 4;
 const MAX_PLATES = 8;
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, LockViewComponent, DepEditorComponent, SolutionPanelComponent],
+  imports: [CommonModule, FormsModule, LockViewComponent, SolutionPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
@@ -49,17 +48,12 @@ export class AppComponent {
   /** Start positions snapshot — restored on Reset */
   private startPositions = new Map<number, number>();
 
-  // Dep-editor two-click flow
-  readonly depEditorFrom = signal<number | null>(null);
-  readonly depEditorTo   = signal<number | null>(null);
-  readonly depEditorSource = signal<number | null>(null);
-
   // ── Plate management ───────────────────────────────────────────────────────
   addPlate(): void {
     const ps = this.plates();
     if (ps.length >= MAX_PLATES) return;
     const seq = ps.length === 0 ? 1 : Math.max(...ps.map(p => p.sequence)) + 1;
-    const plate: PlateState = { sequence: seq, position: GOAL, dependencies: [], highlighted: false, depSource: false };
+    const plate: PlateState = { sequence: seq, position: GOAL, dependencies: [], highlighted: false };
     this.plates.update(arr => [...arr, plate]);
     this.startPositions.set(seq, GOAL);
     this.solveResponse.set(null);
@@ -87,17 +81,8 @@ export class AppComponent {
     return this.plates().find(p => p.sequence === seq);
   }
 
-  // ── Selection / dep-editor ─────────────────────────────────────────────────
+  // ── Selection ──────────────────────────────────────────────────────────────
   onPlateSelected(seq: number): void {
-    const src = this.depEditorSource();
-    if (src !== null && src !== seq) {
-      this.depEditorFrom.set(src);
-      this.depEditorTo.set(seq);
-      this.depEditorSource.set(null);
-      this.clearHighlights();
-      return;
-    }
-    this.depEditorSource.set(null);
     if (this.selectedSeq() === seq) {
       this.selectedSeq.set(null);
       this.clearHighlights();
@@ -113,39 +98,16 @@ export class AppComponent {
     this.selectedSeq.set(null);
     this.solveResponse.set(null);
     this.solveError.set(null);
-    this.depEditorFrom.set(null);
-    this.depEditorTo.set(null);
-    this.depEditorSource.set(null);
   }
 
-  startAddDep(fromSeq: number): void {
-    this.depEditorSource.set(fromSeq);
-    // Source plate → depSource (visually disabled); others → normal
-    this.plates.update(ps => ps.map(p => ({
-      ...p,
-      highlighted: false,
-      depSource: p.sequence === fromSeq,
-    })));
-  }
-
-  cancelDepEditor(): void {
-    this.depEditorFrom.set(null);
-    this.depEditorTo.set(null);
-    this.depEditorSource.set(null);
-    this.restoreHighlight();
-  }
-
-  addDep(result: DepEditorResult): void {
+  // ── Dependencies ───────────────────────────────────────────────────────────
+  addDep(e: { fromSeq: number; toSeq: number; direction: Direction }): void {
     this.plates.update(ps => ps.map(p => {
-      const base = { ...p, depSource: false };
-      if (p.sequence !== result.fromSequence) return base;
-      if (p.dependencies.some(d => d.plateSequence === result.toSequence)) return base;
-      return { ...base, dependencies: [...p.dependencies, { plateSequence: result.toSequence, direction: result.direction }] };
+      if (p.sequence !== e.fromSeq) return p;
+      if (p.dependencies.some(d => d.plateSequence === e.toSeq)) return p;
+      return { ...p, dependencies: [...p.dependencies, { plateSequence: e.toSeq, direction: e.direction }] };
     }));
-    this.depEditorFrom.set(null);
-    this.depEditorTo.set(null);
     this.solveResponse.set(null);
-    this.restoreHighlight();
   }
 
   removeDep(fromSeq: number, toSeq: number): void {
@@ -158,12 +120,7 @@ export class AppComponent {
   }
 
   private clearHighlights(): void {
-    this.plates.update(ps => ps.map(p => ({ ...p, highlighted: false, depSource: false })));
-  }
-
-  private restoreHighlight(): void {
-    const sel = this.selectedSeq();
-    this.plates.update(ps => ps.map(p => ({ ...p, highlighted: p.sequence === sel, depSource: false })));
+    this.plates.update(ps => ps.map(p => ({ ...p, highlighted: false })));
   }
 
   // ── Manual move ────────────────────────────────────────────────────────────
@@ -201,7 +158,6 @@ export class AppComponent {
     this.solveError.set(null);
     this.solveResponse.set(null);
 
-    // Save current positions as the "start" for this solve attempt
     this.plates().forEach(p => this.startPositions.set(p.sequence, p.position));
 
     const lock: Lock = {

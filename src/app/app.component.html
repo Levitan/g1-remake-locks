@@ -52,36 +52,22 @@
           <div class="deps-section">
             <div class="deps-header">
               <span>Dependencies</span>
-              @if (depEditorSource() === sel) {
-                <button class="btn-cancel-dep" (click)="cancelDepEditor()">✕ Cancel</button>
-              } @else {
-                <button
-                  class="btn-add-dep"
-                  [disabled]="plates().length < 2"
-                  (click)="startAddDep(sel)"
-                  title="Click the target plate in the visualizer"
-                >+</button>
-              }
             </div>
 
-            @if (depEditorSource() === sel) {
-              <div class="dep-adding-hint">Click the target plate in the view…</div>
-            } @else {
-              @if (!plateBySeq(sel)?.dependencies?.length) {
-                <div class="no-deps">none</div>
-              }
-              @for (dep of plateBySeq(sel)?.dependencies ?? []; track dep.plateSequence) {
-                <div class="dep-item">
-                  <span class="dep-icon" [class.parallel]="dep.direction === 'PARALLEL'">
-                    {{ dep.direction === 'PARALLEL' ? '⇉' : '⇄' }}
-                  </span>
-                  <span class="dep-label">
-                    → Plate {{ dep.plateSequence }}
-                    <em>({{ dep.direction === 'PARALLEL' ? 'parallel' : 'opposite' }})</em>
-                  </span>
-                  <button class="btn-remove-dep" (click)="removeDep(sel, dep.plateSequence)">×</button>
-                </div>
-              }
+            @if (!plateBySeq(sel)?.dependencies?.length) {
+              <div class="no-deps">none — click Parallel / Opposite on another plate</div>
+            }
+            @for (dep of plateBySeq(sel)?.dependencies ?? []; track dep.plateSequence) {
+              <div class="dep-item">
+                <span class="dep-icon" [class.parallel]="dep.direction === 'PARALLEL'">
+                  {{ dep.direction === 'PARALLEL' ? '⇉' : '⇄' }}
+                </span>
+                <span class="dep-label">
+                  → Plate {{ dep.plateSequence }}
+                  <em>({{ dep.direction === 'PARALLEL' ? 'parallel' : 'opposite' }})</em>
+                </span>
+                <button class="btn-remove-dep" (click)="removeDep(sel, dep.plateSequence)">×</button>
+              </div>
             }
           </div>
         </div>
@@ -113,17 +99,14 @@
           <p class="empty-sub">Position 4 is the unlocked state (goal)</p>
         </div>
       } @else {
-        @if (plates().length > 0) {
-          <p class="dep-hint">
-            💡 <strong>How to add a dependency:</strong> select a plate → click <strong>+</strong> next to Dependencies in the sidebar → click the target plate in the view
-          </p>
-        }
-
         <app-lock-view
           [plates]="plates()"
+          [selectedSeq]="selectedSeq()"
           (move)="manualMove($event)"
           (plateSelected)="onPlateSelected($event)"
           (positionSet)="setPosition($event.sequence, $event.position)"
+          (depAdd)="addDep($event)"
+          (depRemove)="removeDep($event.fromSeq, $event.toSeq)"
         />
       }
 
@@ -133,13 +116,3 @@
     </main>
   </div>
 </div>
-
-<!-- Dep-editor modal -->
-@if (depEditorFrom() !== null && depEditorTo() !== null) {
-  <app-dep-editor
-    [fromSequence]="depEditorFrom()!"
-    [toSequence]="depEditorTo()!"
-    (confirmed)="addDep($event)"
-    (cancel)="cancelDepEditor()"
-  />
-}

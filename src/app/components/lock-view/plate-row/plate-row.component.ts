@@ -6,7 +6,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { PlateState } from '../../../models/lock.model';
+import { PlateState, Direction } from '../../../models/lock.model';
 
 /**
  * Plate-row visualization:
@@ -35,7 +35,6 @@ const CELL_W = 44; // px per cell slot (cell width + gap)
       class="plate-row"
       [class.selected]="plate.highlighted"
       [class.solved]="plate.position === GOAL"
-      [class.dep-source]="plate.depSource"
       (click)="select.emit(plate.sequence)"
     >
       <!-- Sequence label -->
@@ -97,6 +96,23 @@ const CELL_W = 44; // px per cell slot (cell width + gap)
         </div>
       }
 
+      <!-- Inline dep actions (shown when another plate is selected) -->
+      @if (depState === 'eligible') {
+        <div class="dep-actions">
+          <button class="dep-btn parallel"
+            (click)="$event.stopPropagation(); depAdd.emit('PARALLEL')">⇉ Parallel</button>
+          <button class="dep-btn opposite"
+            (click)="$event.stopPropagation(); depAdd.emit('OPPOSITE')">⇄ Opposite</button>
+        </div>
+      }
+      @if (depState === 'parallel' || depState === 'opposite') {
+        <div class="dep-actions">
+          <span class="dep-current">{{ depState === 'parallel' ? '⇉' : '⇄' }}</span>
+          <button class="dep-btn remove"
+            (click)="$event.stopPropagation(); depRemove.emit()">Remove</button>
+        </div>
+      }
+
       @if (plate.highlighted) {
         <span class="selected-badge">selected</span>
       }
@@ -117,15 +133,9 @@ const CELL_W = 44; // px per cell slot (cell width + gap)
       transition: border-color .2s, box-shadow .2s;
       user-select: none;
 
-      &:hover      { border-color: #8888cc; }
-      &.selected   { border-color: #7070dd; background: linear-gradient(135deg, #eeeeff 0%, #e8e8ff 100%); box-shadow: 0 2px 10px #8080dd30; }
-      &.solved     { border-color: #4caf50; box-shadow: 0 0 12px #4caf5022; }
-      &.dep-source {
-        opacity: 0.4;
-        pointer-events: none;
-        border-color: #ccc;
-        filter: grayscale(0.6);
-      }
+      &:hover    { border-color: #8888cc; }
+      &.selected { border-color: #7070dd; background: linear-gradient(135deg, #eeeeff 0%, #e8e8ff 100%); box-shadow: 0 2px 10px #8080dd30; }
+      &.solved   { border-color: #4caf50; box-shadow: 0 0 12px #4caf5022; }
     }
 
     .plate-label {
@@ -156,15 +166,12 @@ const CELL_W = 44; // px per cell slot (cell width + gap)
     /* ── Track ──────────────────────────────────────── */
     .track-viewport {
       position: relative;
-      /* 7 cells × 40px + 6 gaps × 4px = 304px — show exactly 7 cells at position 4;
-         edge cells slide off-screen as plate moves */
       width: 304px;
       height: 40px;
       overflow: hidden;
       flex-shrink: 0;
     }
 
-    /* Fixed vertical pin line (centre of viewport) */
     .pin-line {
       position: absolute;
       left: 50%;
@@ -180,14 +187,12 @@ const CELL_W = 44; // px per cell slot (cell width + gap)
       z-index: 1;
     }
 
-    /* Sliding plate track */
     .track {
       position: absolute;
       left: 0;
       top: 0;
       display: flex;
       gap: 4px;
-      /* Transition gives the sliding animation */
       transition: transform .25s cubic-bezier(.4, 0, .2, 1);
     }
 
@@ -208,7 +213,6 @@ const CELL_W = 44; // px per cell slot (cell width + gap)
       &:hover:not(.current) { border-color: #a0a0cc; background: #ededff; }
       &.goal    { border-color: #81c784; background: #e8f5e9; }
       &.current { background: #eaeaff; border-color: #7070cc; }
-      /* goal + current = the solved hole is under the pin */
       &.goal.current { background: #c8f0c8; border-color: #4caf50; }
 
       .cell-num {
@@ -222,7 +226,6 @@ const CELL_W = 44; // px per cell slot (cell width + gap)
       &.goal.current .cell-num { color: #2e7d32; }
     }
 
-    /* Fixed pin symbol layered on top */
     .pin-symbol {
       position: absolute;
       left: 50%;
@@ -253,6 +256,51 @@ const CELL_W = 44; // px per cell slot (cell width + gap)
       &.opposite { background: #fce8e8; color: #c62828; border: 1px solid #f4433666; }
     }
 
+    /* Inline dep action buttons */
+    .dep-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .dep-current {
+      font-size: 14px;
+      color: #888;
+    }
+
+    .dep-btn {
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid;
+      transition: background .15s;
+      white-space: nowrap;
+
+      &.parallel {
+        background: #f0faf0;
+        border-color: #4caf5088;
+        color: #2e7d32;
+        &:hover { background: #d4f0d4; }
+      }
+
+      &.opposite {
+        background: #fff4f4;
+        border-color: #f4433688;
+        color: #c62828;
+        &:hover { background: #fdd; }
+      }
+
+      &.remove {
+        background: #f8f8f8;
+        border-color: #ccc;
+        color: #888;
+        &:hover { background: #eee; color: #444; }
+      }
+    }
+
     .selected-badge {
       font-size: 10px;
       padding: 2px 7px;
@@ -272,15 +320,14 @@ export class PlateRowComponent {
   readonly CELLS   = [1, 2, 3, 4, 5, 6, 7];
 
   @Input({ required: true }) plate!: PlateState;
+  @Input() depState: 'none' | 'eligible' | 'parallel' | 'opposite' = 'none';
+
   @Output() move        = new EventEmitter<{ sequence: number; delta: number }>();
   @Output() select      = new EventEmitter<number>();
   @Output() positionSet = new EventEmitter<{ sequence: number; position: number }>();
+  @Output() depAdd      = new EventEmitter<Direction>();
+  @Output() depRemove   = new EventEmitter<void>();
 
-  /**
-   * Slide the track so cell[plate.position] sits under the pin.
-   * Cell 4 is naturally centred when translateX = 0 (4th of 7 = middle).
-   * Each step away shifts by ±CELL_W px.
-   */
   get trackOffset(): number {
     return -(this.plate.position - 4) * CELL_W;
   }

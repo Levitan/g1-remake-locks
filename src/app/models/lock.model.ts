@@ -35,6 +35,4 @@ export interface PlateState {
   position: number; // current 1–7
   dependencies: Dependency[];
   highlighted: boolean;
-  /** True while this plate is the source of a pending dep-add action */
-  depSource: boolean;
 }
